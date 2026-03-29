@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        :root { --red: #6c232e; --blue: #23365d; --white: #ffffff; --black: #1a1a1a; }
+        body { margin: 0; font-family: 'Segoe UI', sans-serif; background: #f4f4f4; }
+
+        .slider-wrapper {
+            position: relative; max-width: 850px; height: 380px; margin: 50px auto;
+            background: var(--white); border-radius: 12px; overflow: hidden;
+            display: flex; box-shadow: 0 15px 35px rgba(0,0,0,0.1);
+        }
+
+        /* Left Side: Image */
+        .img-container { flex: 1.2; background: var(--blue); position: relative; overflow: hidden; }
+        .event-poster { width: 100%; height: 100%; object-fit: cover; transition: opacity 0.6s ease; }
+
+        /* Right Side: Text */
+        .text-container { flex: 1; padding: 35px; display: flex; flex-direction: column; justify-content: center; background: white; z-index: 2; }
+
+        .slide {
+            position: absolute; inset: 0; display: flex; opacity: 0; visibility: hidden;
+            transition: all 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .slide.active { opacity: 1; visibility: visible; }
+
+        .badge { background: var(--red); color: white; padding: 4px 10px; border-radius: 3px; font-size: 11px; font-weight: bold; text-transform: uppercase; margin-bottom: 12px; display: inline-block; }
+        .title { font-size: 26px; color: var(--blue); margin: 0 0 15px 0; font-weight: 800; line-height: 1.1; }
+        .meta { margin-bottom: 8px; font-size: 15px; color: #444; display: flex; align-items: center; gap: 10px; }
+        .meta b { color: var(--red); font-size: 18px; }
+
+        .btn {
+            margin-top: 25px; padding: 12px 25px; background: var(--blue); color: white;
+            text-decoration: none; border-radius: 6px; font-weight: 600; display: inline-block;
+            transition: 0.3s; text-align: center; border: none; cursor: pointer;
+        }
+        .btn:hover { background: var(--red); transform: translateY(-2px); }
+
+        .dots { position: absolute; bottom: 25px; right: 25px; display: flex; gap: 8px; }
+        .dot { width: 8px; height: 8px; border-radius: 50%; background: #ccc; transition: 0.3s; }
+        .dot.active { background: var(--red); width: 22px; border-radius: 4px; }
+
+        @media (max-width: 650px) { .slider-wrapper { flex-direction: column; height: auto; } .img-container { height: 200px; } }
+    </style>
+</head>
+<body>
+
+<div class="slider-wrapper" id="main-slider">
+    <div style="margin: auto; padding: 40px; text-align: center; color: var(--blue);">Connecting to Zen DNA Events...</div>
+</div>
+
+<script>
+const SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTxf_ijaWN5lfKCdAcRtyE9B_ahp7ta8YFhIqIVylNQmZXZpaVfeD7MZbPntZeS92IrXPCDLf0aB7my/pub?gid=0&single=true&output=csv";
+
+// Fixes Google Drive Image IDs to direct URLs
+function fixImg(url) {
+    if (!url || !url.includes('drive.google.com')) return url;
+    const id = url.split('/d/')[1]?.split('/')[0] || url.split('id=')[1]?.split('&')[0];
+    return `https://drive.google.com/thumbnail?id=${id}&sz=w1000`;
+}
+
+// Parses DD-MM-YYYY or YYYY-MM-DD
+function parseDate(str) {
+    if (!str) return new Date(0);
+    const p = str.trim().replace(/[\/\.]/g, "-").split("-");
+    return p[0].length === 4 ? new Date(p[0], p[1]-1, p[2]) : new Date(p[2], p[1]-1, p[0]);
+}
+
+async function init() {
+    try {
+        const response = await fetch(SHEET_URL + '&t=' + Date.now());
+        const csvText = await response.text();
+        const rows = csvText.trim().split("\n").map(r => r.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/));
+        
+        const headers = rows[0].map(h => h.trim().toLowerCase());
+        const findCol = (keys) => headers.findIndex(h => keys.some(k => h.includes(k)));
+
+        const col = {
+            name: findCol(['name', 'event', 'title']),
+            date: findCol(['date', 'day']),
+            time: findCol(['time', 'start']),
+            venue: findCol(['venue', 'location', 'place']),
+            img: findCol(['image', 'invitation', 'img', 'poster'])
+        };
+
+        const today = new Date().setHours(0,0,0,0);
+
+        const events = rows.slice(1).map(r => ({
+            data: r,
+            dateObj: parseDate(r[col.date])
+        }))
+        .filter(e => e.dateObj >= today)
+        .sort((a, b) => a.dateObj - b.dateObj); // ORDER BY DATE
+
+        render(events, col);
+    } catch (err) {
+        document.getElementById("main-slider").innerHTML = "<div style='margin:auto'>Error loading data. Verify CSV publishing.</div>";
+    }
+}
+
+function render(events, col) {
+    const box = document.getElementById("main-slider");
+    if (!events.length) {
+        box.innerHTML = "<div style='margin:auto'>No Upcoming Events Found</div>";
+        return;
+    }
+
+    box.innerHTML = "";
+    const nav = document.createElement("div");
+    nav.className = "dots";
+
+    events.forEach((ev, i) => {
+        const r = ev.data;
+        const slide = document.createElement("div");
+        slide.className = `slide ${i === 0 ? 'active' : ''}`;
+        slide.innerHTML = `
+            <div class="img-container">
+                <img src="${fixImg(r[col.img])}" class="event-poster" onerror="this.src='https://via.placeholder.com/600x600?text=Zen+DNA+Invitation'">
+            </div>
+            <div class="text-container">
+                <span class="badge">Invitation</span>
+                <h2 class="title">${r[col.name] || 'Zen DNA Event'}</h2>
+                <div class="meta"><b>📅</b> ${r[col.date]}</div>
+                <div class="meta"><b>⏰</b> ${r[col.time] || 'TBA'}</div>
+                <div class="meta"><b>📍</b> ${r[col.venue] || 'Online'}</div>
+                <a href="https://azbtweb.wixsite.com/zen-dna/events" target="_blank" class="btn">Learn More</a>
+            </div>
+        `;
+        box.appendChild(slide);
+
+        const d = document.createElement("div");
+        d.className = `dot ${i === 0 ? 'active' : ''}`;
+        nav.appendChild(d);
+    });
+
+    box.appendChild(nav);
+
+    // 5-SECOND AUTO-SLIDE
+    let cur = 0;
+    const s = document.querySelectorAll(".slide");
+    const d = document.querySelectorAll(".dot");
+    if (s.length > 1) {
+        setInterval(() => {
+            s[cur].classList.remove("active");
+            d[cur].classList.remove("active");
+            cur = (cur + 1) % s.length;
+            s[cur].classList.add("active");
+            d[cur].classList.add("active");
+        }, 5000);
+    }
+}
+
+init();
+</script>
+
+</body>
+</html>
