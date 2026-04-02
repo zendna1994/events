@@ -19,6 +19,10 @@
         
         .card { text-align: left; background: #fff; position: relative; }
 
+        /* NO EVENTS MESSAGE STYLE */
+        .no-events { padding: 40px 20px; color: #666; font-size: 13px; line-height: 1.6; }
+        .no-events-icon { font-size: 30px; margin-bottom: 10px; opacity: 0.5; }
+
         /* IMAGE SECTION */
         .img-box { height: 210px; position: relative; background: #1a1a1a; display: flex; align-items: center; justify-content: center; overflow: hidden; }
         .bg-blur { position: absolute; width: 100%; height: 100%; object-fit: cover; filter: blur(12px); opacity: 0.4; z-index: 1; }
@@ -99,16 +103,10 @@ function getDriveImg(url) {
 function updateTimerHtml(start, end) {
     if(!start) return "Upcoming";
     const now = new Date();
-    
-    // Live Check
     if(start <= now && (!end || now <= end)) return "<span class='live-text'>🔴 LIVE NOW</span>";
-    
     const diff = start - now;
     if(diff < 0) return "Started";
-    
     const diffInDays = diff / (1000 * 60 * 60 * 24);
-
-    // Logic: If starts in MORE than 2 days, show Day count. Else show HH:MM:SS
     if (diffInDays >= 2) {
         return `In ${Math.floor(diffInDays)} days`;
     } else {
@@ -126,6 +124,7 @@ async function init() {
         const data = parseCSV(text);
         const track = document.getElementById("track");
         const frame = document.getElementById("slider-frame");
+        const loader = document.getElementById("loader");
         const now = new Date();
 
         let events = data.map(e => {
@@ -136,8 +135,17 @@ async function init() {
         .filter(e => e.start && (e.end ? e.end >= now : e.start >= (now - 3600000)))
         .sort((a,b) => a.start - b.start);
 
-        document.getElementById("loader").style.display = "none";
+        loader.style.display = "none";
         frame.style.display = "block";
+
+        if (events.length === 0) {
+            frame.innerHTML = `
+                <div class="no-events">
+                    <div class="no-events-icon">🗓️</div>
+                    <div>No events scheduled at the moment.<br>Kindly check back later.</div>
+                </div>`;
+            return;
+        }
 
         events.forEach((e, cardIdx) => {
             const imgLinks = (e.Invitation_Link || "").split("|").map(s => s.trim()).filter(s => s !== "");
@@ -190,6 +198,7 @@ async function init() {
 }
 
 function initSliderLogic(count) {
+    if (count === 0) return;
     const frame = document.getElementById("slider-frame");
     const track = document.getElementById("track");
     let isDragging = false, startX, currentTranslate = 0, prevTranslate = 0, currentIndex = 0;
