@@ -177,7 +177,15 @@ fetch(CSV_URL).then(res => res.text()).then(csv => {
     applyFilters();
 });
 
+function parseDateForCompare(d, t) {
+    if(!d) return null;
+    const [day, month, year] = d.split("-");
+    const time = t || "23:59";
+    return new Date(`${year}-${month}-${day}T${time}`);
+}
+
 function applyFilters() {
+    const now = new Date();
     const q = document.getElementById("searchBox").value.toLowerCase();
     const yr = document.getElementById("filterYear").value;
     const ty = document.getElementById("filterType").value;
@@ -186,8 +194,14 @@ function applyFilters() {
     const sort = document.getElementById("sortOrder").value;
 
     let filtered = allRecords.filter(r => {
+        // COMPLETED EVENTS LOGIC: Compare with End_date if available, otherwise Date
+        const endCompareDateStr = r.end_date || r.date;
+        const eventEnd = parseDateForCompare(endCompareDateStr, r.end_time);
+        
+        if (!eventEnd || eventEnd >= now) return false;
+
         const d = r.date ? r.date.split("-").reverse().join("-") : "";
-        const matchQ = (r.event_name + r.topic + r.description).toLowerCase().includes(q);
+        const matchQ = (r.event_name + (r.topic || "") + (r.description || "")).toLowerCase().includes(q);
         const matchYr = !yr || r.year_label === yr;
         const matchTy = !ty || r.event_type === ty;
         const matchDate = (!sd || d >= sd) && (!ed || d <= ed);
@@ -195,8 +209,8 @@ function applyFilters() {
     });
 
     filtered.sort((a, b) => {
-        const d1 = a.date ? a.date.split("-").reverse().join("") : "0";
-        const d2 = b.date ? b.date.split("-").reverse().join("") : "0";
+        const d1 = (a.end_date || a.date).split("-").reverse().join("");
+        const d2 = (b.end_date || b.date).split("-").reverse().join("");
         return sort === "new" ? d2.localeCompare(d1) : d1.localeCompare(d2);
     });
 
@@ -206,7 +220,7 @@ function applyFilters() {
 function render(data) {
     const body = document.getElementById("archiveBody");
     body.innerHTML = "";
-    document.getElementById("statsBar").innerText = `Total Events: ${data.length}`;
+    document.getElementById("statsBar").innerText = `Total Completed Events: ${data.length}`;
 
     data.forEach((r, cardIdx) => {
         const imgLinks = (r.invitation_link || "").split("|").map(s => s.trim());
@@ -223,7 +237,7 @@ function render(data) {
                     <div class="item-tag">${r.event_type || 'Event'} | ${r.year_label || ''}</div>
                     <div class="item-title" onclick="toggleExpand(${cardIdx})">${r.event_name}</div>
                     ${r.topic ? `<div class="item-info">Topic: ${r.topic}</div>` : ''}
-                    <div class="item-meta">🗓️ ${r.date} | ⏰ ${r.start_time} | 📍 ${r.venue}</div>
+                    <div class="item-meta">🗓️ ${r.date}${r.end_date ? ' - ' + r.end_date : ''} | ⏰ ${r.start_time} | 📍 ${r.venue}</div>
                     <div class="item-desc">${r.description || ''}</div>
                 </div>
             </div>
